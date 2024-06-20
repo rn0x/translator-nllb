@@ -1,0 +1,35 @@
+{
+  "name": "translator-nllb",
+  "version": "1.0.0",
+  "description": "integrates NLLB models for accurate language translation, employing JavaScript for process management and Python for executing complex educational models efficiently.",
+  "main": "src/Translator.js",
+  "type": "module",
+  "scripts": {
+    "start": "node test.js"
+  },
+  "keywords": [
+    "translator",
+    "NLLB",
+    "language translation",
+    "automated translation",
+    "NLP",
+    "machine translation",
+    "natural language processing",
+    "Node.js",
+    "JavaScript",
+    "npm package"
+  ],
+  "author": {
+    "name": "ryan almalki",
+    "url": "https://github.com/rn0x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rn0x/translator-nllb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rn0x/translator-nllb/issues"
+  },
+  "homepage": "https://github.com/rn0x/translator-nllb#readme",
+  "license": "MIT"
+}
