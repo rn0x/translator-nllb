@@ -1,6 +1,6 @@
 {
   "name": "translator-nllb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "integrates NLLB models for accurate language translation, employing JavaScript for process management and Python for executing complex educational models efficiently.",
   "main": "src/Translator.js",
   "type": "module",

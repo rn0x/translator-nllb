@@ -6,7 +6,6 @@ import fs from "node:fs";
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const __root = path.resolve(process.cwd()); // project root directory (./)
 const MAIN_PATH = path.join(__dirname, "..", "src", "main.py");
 
 const MODELS = [
@@ -19,20 +18,30 @@ const LANGS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "langs", "fl
 const LANG_LIST = Object.keys(LANGS);
 
 /**
- * كلاس المترجم لإعداد وتنفيذ الترجمة باستخدام نماذج NLLB.
+ * Translator class for setting up and executing translations using NLLB models.
  */
 class Translator {
 
+  /**
+   * Constructs a new Translator instance.
+   */
   constructor() {
+    /** @type {string[]} List of available models. */
     this.models = MODELS;
+
+    /** @type {Object} Language mappings. */
     this.langs = LANGS;
+
+    /** @type {string[]} List of supported languages. */
     this.langList = LANG_LIST;
+
+    /** @type {boolean} Indicates if setup has been completed. */
     this.setupCompleted = false;
   }
 
   /**
-   * إعداد البيئة الافتراضية وتثبيت الحزم المطلوبة.
-   * @param {boolean} force - إعادة الإعداد بالقوة إذا كانت البيئة مثبتة بالفعل.
+   * Sets up the virtual environment and installs required packages.
+   * @param {boolean} [force=false] - Force setup even if environment is already set up.
    * @returns {Promise<void>}
    */
   async setup(force = false) {
@@ -42,76 +51,105 @@ class Translator {
     }
 
     try {
-      // تأكد من إعداد البيئة الافتراضية
       await venv(force);
-
-      // تثبيت الحزم إذا لم تكن مثبتة بالفعل
-      const packages = ["transformers", "numpy", "torch", "torchvision", "torchaudio"];
-      for (const pkg of packages) {
-        await install(pkg);
-      }
-
-      // console.log("Setup completed successfully.");
+      const packages = ["transformers", "numpy<2", "torch", "torchvision", "torchaudio"];
+      await Promise.all(packages.map(pkg => install(pkg)));
       this.setupCompleted = true;
     } catch (error) {
       console.error("Error during setup:", error);
+      throw error;
     }
   }
 
   /**
-   * التحقق من صحة اللغة.
-   * @param {string} str - كود اللغة للتحقق.
-   * @returns {boolean} - إرجاع صحيح إذا كانت اللغة صالحة.
+   * Checks if a language code is valid.
+   * @param {string} str - Language code to validate.
+   * @returns {boolean} True if the language is valid, otherwise false.
    */
   isValidLanguage(str) {
-    return this.langList.indexOf(str) > -1;
+    return this.langList.includes(str);
   }
 
   /**
-   * تحويل كود اللغة إلى التنسيق المطلوب.
-   * @param {string} str - كود اللغة للتحويل.
-   * @returns {string} - الكود المحول للغة.
+   * Converts a language code to the required format.
+   * @param {string} str - Language code to convert.
+   * @returns {string} Converted language code.
    */
   convertLanguage(str) {
     return this.langs[str];
   }
 
   /**
-   * التحقق من صحة مؤشر النموذج.
-   * @param {number} i - مؤشر النموذج للتحقق.
-   * @returns {boolean} - إرجاع صحيح إذا كان مؤشر النموذج صالح.
+   * Checks if a model index is valid.
+   * @param {number} i - Model index to validate.
+   * @returns {boolean} True if the model index is valid, otherwise false.
    */
   isValidModelIndex(i) {
     return !!this.models[i || 0];
   }
 
   /**
-   * تنفيذ الترجمة باستخدام النموذج واللغة المحددين.
-   * @param {string} text - النص للترجمة.
-   * @param {string} to - كود اللغة المستهدفة.
-   * @param {number} modelIndex - مؤشر النموذج للاستخدام.
-   * @returns {Promise<string>} - النص المترجم.
+   * Executes translation using the specified model and language.
+   * @param {string} text - Text to translate.
+   * @param {string} to - Target language code.
+   * @param {number} modelIndex - Model index to use.
+   * @returns {Promise<string>} Translated text.
    */
   async exec(text, to, modelIndex) {
-    if (!this.isValidLanguage(to)) {
-      throw new Error(`${to} is an invalid language.`);
-    }
-    if (!this.isValidModelIndex(modelIndex)) {
-      throw new Error(`${(modelIndex || 0)} is an invalid modelIndex.`);
-    }
+    try {
+      if (!this.isValidLanguage(to)) {
+        throw new Error(`${to} is an invalid language.`);
+      }
+      if (!this.isValidModelIndex(modelIndex)) {
+        throw new Error(`${(modelIndex || 0)} is an invalid modelIndex.`);
+      }
 
-    to = this.convertLanguage(to);
+      const targetLanguage = this.convertLanguage(to);
+      const model = this.models[modelIndex || 0];
+      const { stdout, stderr } = await execute(MAIN_PATH, [model, text, targetLanguage]);
 
-    const model = this.models[modelIndex || 0];
-    const { stdout, stderr } = await execute(MAIN_PATH, [model, text, to]);
+      if (stdout.includes("Downloading model") || stdout.includes("downloaded successfully.")) {
+        console.log(stdout);
+      }
 
-    if (stdout.includes("Downloading model") || stdout.includes("downloaded successfully.")) {
-      console.log(stdout);
+      if (stdout === "" && stderr.length > 0) {
+        throw new Error(stderr);
+      }
+
+      return stdout.trim();
+
+    } catch (error) {
+      console.error("Translation error:", error);
+      throw error;
     }
-    if (stdout === "" && stderr.length > 0) {
-      throw new Error(stderr);
+  }
+
+  /**
+  * Translates an array of texts concurrently with a callback function for each translation.
+  * @param {string[]} texts - Array of texts to translate.
+  * @param {string} to - Target language code.
+  * @param {number} modelIndex - Model index to use.
+  * @param {function} callback - Callback function to invoke with each translated text.
+  */
+  async translateArray(texts, to, modelIndex, callback) {
+    try {
+      await this.setup(false);
+
+      // Concurrently execute translations
+      for (const text of texts) {
+        try {
+          const result = await this.exec(text, to, modelIndex);
+          callback(null, result); // Invoke callback with each translated text
+        } catch (error) {
+          console.error(`Error translating "${text}":`, error);
+          callback(error); // Invoke callback with error if translation fails
+        }
+      }
+
+    } catch (error) {
+      console.error("Error during translation setup:", error);
+      callback(error); // Invoke callback with error if setup fails
     }
-    return stdout;
   }
 }
 
